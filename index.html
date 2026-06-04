@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Europe - Géo-Localisation & Photos</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --green: #2d6a4f;
+            --green-light: #40916c;
+            --green-pale: #e8f5e9;
+            --blue: #1565c0;
+            --blue-pale: #e3f2fd;
+            --amber: #b45309;
+            --amber-pale: #fef3c7;
+            --violet: #6d28d9;
+            --violet-pale: #ede9fe;
+            --red: #b91c1c;
+            --red-pale: #fee2e2;
+            --gray: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 20px rgba(0,0,0,0.08);
+            --shadow-lg: 0 10px 40px rgba(0,0,0,0.15);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 28px 16px 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.5rem, 4vw, 2.1rem);
+            color: #1a2535;
+            letter-spacing: -0.5px;
+        }
+
+        header p {
+            color: var(--gray);
+            font-size: 14px;
+            margin-top: 6px;
+        }
+
+        .flag-row {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            font-size: 22px;
+        }
+
+        /* ── Barre de recherche ── */
+        .search-wrapper {
+            width: 100%;
+            max-width: 560px;
+            margin-bottom: 16px;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .search-input-wrap {
+            position: relative;
+            flex: 1;
+            z-index: 1000;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            color: var(--gray);
+            pointer-events: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 13px 14px 13px 42px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            background: #fff;
+            color: #1a2535;
+            transition: border-color 0.25s, box-shadow 0.25s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--green-light);
+            box-shadow: 0 0 0 3px rgba(64, 145, 108, 0.15);
+        }
+
+        /* Filtre de pays */
+        select#countryFilter {
+            padding: 12px 10px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-family: inherit;
+            background: #fff;
+            color: #1a2535;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.25s;
+            min-width: 160px;
+        }
+
+        select#countryFilter:focus {
+            border-color: var(--green-light);
+        }
+
+        /* Suggestions */
+        .suggestions {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 9999;
+        }
+
+        .suggestions div {
+            padding: 12px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: background 0.15s;
+        }
+
+        .suggestions div:last-child { border-bottom: none; }
+        .suggestions div:hover { background: #f8fafc; }
+
+        .suggestions .name {
+            font-weight: 600;
+            color: #1a2535;
+            font-size: 14px;
+        }
+
+        .suggestions .details {
+            font-size: 12px;
+            color: var(--gray);
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 20px;
+            align-self: flex-start;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        /* Couleurs des tags selon type OSM */
+        .tag-city        { background: var(--blue-pale);   color: var(--blue); }
+        .tag-town        { background: var(--blue-pale);   color: var(--blue); }
+        .tag-village     { background: var(--green-pale);  color: var(--green); }
+        .tag-hamlet      { background: var(--green-pale);  color: var(--green); }
+        .tag-suburb      { background: var(--amber-pale);  color: var(--amber); }
+        .tag-street      { background: var(--amber-pale);  color: var(--amber); }
+        .tag-country     { background: var(--violet-pale); color: var(--violet); }
+        .tag-county      { background: var(--violet-pale); color: var(--violet); }
+        .tag-state       { background: var(--violet-pale); color: var(--violet); }
+        .tag-place       { background: var(--green-pale);  color: var(--green); }
+        .tag-other       { background: #f1f5f9;            color: var(--gray); }
+
+        /* ── Carte ── */
+        #map {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        /* ── Spinner ── */
+        .spinner {
+            display: none;
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-top-color: var(--green-light);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+        /* ── Modale ── */
+        dialog {
+            border: none;
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            padding: 0;
+            max-width: 500px;
+            width: 95%;
+            font-family: inherit;
+            overflow: hidden;
+        }
+
+        dialog::backdrop {
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--green) 0%, var(--green-light) 100%);
+            padding: 18px 20px 14px;
+            color: #fff;
+        }
+
+        .modal-header h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .modal-header .modal-country {
+            font-size: 12px;
+            opacity: 0.85;
+            letter-spacing: 0.3px;
+        }
+
+        .photo-container {
+            width: 100%;
+            height: 260px;
+            background: #eceff1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-container .photo-msg {
+            color: var(--gray);
+            font-size: 13px;
+            padding: 10px 20px;
+            text-align: center;
+        }
+
+        .modal-body {
+            padding: 16px 20px 20px;
+        }
+
+        .modal-cta {
+            font-size: 14px;
+            color: #475569;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
+            transition: opacity 0.2s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover  { opacity: 0.88; }
+        .btn:active { transform: scale(0.97); }
+
+        .btn-google { background: #1a73e8; color: #fff; }
+        .btn-close  { background: #e2e8f0; color: #475569; }
+
+        /* ── Attribution ── */
+        .attribution {
+            margin-top: 14px;
+            font-size: 11px;
+            color: #94a3b8;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Géolocalisation Europe</h1>
+        <p>Communes, rues, lieux-dits &amp; régions à travers toute l'Europe</p>
+        <div class="flag-row" title="Couverture Europe entière">
+            🇫🇷 🇩🇪 🇮🇹 🇪🇸 🇵🇹 🇧🇪 🇳🇱 🇵🇱 🇨🇿 🇦🇹 🇨🇭 🇬🇷 🇷🇴 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇭🇺 🇸🇰 🇨🇷 🇧🇦 🇧🇬 🇺🇦 🇷🇸 🇸🇮 🇦🇱
+        </div>
+        <p style="font-size: 11px; color: var(--green); margin-top: 8px; font-weight: 500;">✨ Photos Haute Qualité activées pour la France</p>
+    </header>
+
+    <div class="search-wrapper">
+        <div class="search-row">
+            <div class="search-input-wrap">
+                <!-- Icône loupe -->
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" id="communeInput" placeholder="Ex: Sarlat, Rome, Barcelona, Wien…" autocomplete="off">
+                <div class="spinner" id="spinner"></div>
+                <div id="suggestionsList" class="suggestions"></div>
+            </div>
+            <select id="countryFilter" title="Filtrer par pays">
+                <option value="">🌍 Toute l'Europe</option>
+                <option value="fr">🇫🇷 France</option>
+                <option value="de">🇩🇪 Allemagne</option>
+                <option value="it">🇮🇹 Italie</option>
+                <option value="es">🇪🇸 Espagne</option>
+                <option value="pt">🇵🇹 Portugal</option>
+                <option value="be">🇧🇪 Belgique</option>
+                <option value="nl">🇳🇱 Pays-Bas</option>
+                <option value="ch">🇨🇭 Suisse</option>
+                <option value="at">🇦🇹 Autriche</option>
+                <option value="pl">🇵🇱 Pologne</option>
+                <option value="cz">🇨🇿 Tchéquie</option>
+                <option value="ro">🇷🇴 Roumanie</option>
+                <option value="hu">🇭🇺 Hongrie</option>
+                <option value="gr">🇬🇷 Grèce</option>
+                <option value="se">🇸🇪 Suède</option>
+                <option value="no">🇳🇴 Norvège</option>
+                <option value="dk">🇩🇰 Danemark</option>
+                <option value="fi">🇫🇮 Finlande</option>
+                <option value="sk">🇸🇰 Slovaquie</option>
+                <option value="si">🇸🇮 Slovénie</option>
+                <option value="hr">🇭🇷 Croatie</option>
+                <option value="bg">🇧🇬 Bulgarie</option>
+                <option value="ua">🇺🇦 Ukraine</option>
+                <option value="rs">🇷🇸 Serbie</option>
+                <option value="ba">🇧🇦 Bosnie</option>
+                <option value="al">🇦🇱 Albanie</option>
+                <option value="gb">🇬🇧 Royaume-Uni</option>
+                <option value="ie">🇮🇪 Irlande</option>
+                <option value="lu">🇱🇺 Luxembourg</option>
+                <option value="lv">🇱🇻 Lettonie</option>
+                <option value="lt">🇱🇹 Lituanie</option>
+                <option value="ee">🇪🇪 Estonie</option>
+                <option value="is">🇮🇸 Islande</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    <p class="attribution">Données : © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors | Photos : Wikimedia</p>
+
+    <dialog id="locationModal">
+        <div class="modal-header">
+            <h3 id="modalTitle">Lieu Localisé</h3>
+            <div class="modal-country" id="modalCountry"></div>
+        </div>
+        <div class="photo-container" id="modalPhotoContainer">
+            <p class="photo-msg" id="photoStatus">Recherche d'une photo…</p>
+        </div>
+        <div class="modal-body">
+            <p class="modal-cta">Que souhaitez-vous faire ?</p>
+            <div class="modal-buttons">
+                <button class="btn btn-google" id="btnGoogleMaps">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    Google Maps
+                </button>
+                <button class="btn btn-close" id="btnCloseModal">Rester ici</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // ── 1. CARTE LEAFLET centrée sur l'Europe ──────────────────────────────
+        const map = L.map('map').setView([48.5, 10], 5);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let currentMarker = null;
+        const input       = document.getElementById('communeInput');
+        const suggest     = document.getElementById('suggestionsList');
+        const spinner     = document.getElementById('spinner');
+        const countryFlt  = document.getElementById('countryFilter');
+        let debounceTimer;
+
+        // Éléments modale
+        const modal        = document.getElementById('locationModal');
+        const modalTitle   = document.getElementById('modalTitle');
+        const modalCountry = document.getElementById('modalCountry');
+        const modalPhoto   = document.getElementById('modalPhotoContainer');
+        const btnMaps      = document.getElementById('btnGoogleMaps');
+        const btnClose     = document.getElementById('btnCloseModal');
+
+        // ── 2. CORRESPONDANCE TYPE OSM → libellé + classe CSS ─────────────────
+        const TYPE_MAP = {
+            city:           { label: 'Ville',        cls: 'tag-city' },
+            town:           { label: 'Bourg',        cls: 'tag-town' },
+            village:        { label: 'Village',      cls: 'tag-village' },
+            hamlet:         { label: 'Hameau',       cls: 'tag-hamlet' },
+            suburb:         { label: 'Quartier',     cls: 'tag-suburb' },
+            neighbourhood:  { label: 'Quartier',     cls: 'tag-suburb' },
+            road:           { label: 'Route / Rue',  cls: 'tag-street' },
+            street:         { label: 'Rue',          cls: 'tag-street' },
+            country:        { label: 'Pays',         cls: 'tag-country' },
+            county:         { label: 'Département',  cls: 'tag-county' },
+            state:          { label: 'Région',       cls: 'tag-state' },
+            administrative: { label: 'Zone admin.',  cls: 'tag-county' },
+            place:          { label: 'Lieu',         cls: 'tag-place' },
+        };
+
+        function typeInfo(t) {
+            return TYPE_MAP[t] || { label: t || 'Lieu', cls: 'tag-other' };
+        }
+
+        // ── 3. ZOOM selon le type ──────────────────────────────────────────────
+        function zoomForType(type) {
+            const z = { country: 6, state: 8, county: 10, city: 13, town: 14, village: 15, hamlet: 16, suburb: 15 };
+            return z[type] || 16;
+        }
+
+        // ── 4. RECHERCHE NOMINATIM (OpenStreetMap, couverture mondiale) ────────
+        input.addEventListener('input', function () {
+            const q = this.value.trim();
+            suggest.innerHTML = '';
+            if (q.length < 3) return;
+
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                spinner.style.display = 'block';
+
+                const country = countryFlt.value;
+                // Bbox Europe approx : -31,34 → 45,72
+                let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=10&accept-language=fr&viewbox=-31,72,45,34&bounded=0`;
+                if (country) url += `&countrycodes=${country}`;
+
+                try {
+                    const res  = await fetch(url, { headers: { 'Accept-Language': 'fr,en' } });
+                    const data = await res.json();
+                    spinner.style.display = 'none';
+                    suggest.innerHTML = '';
+
+                    if (!data.length) {
+                        suggest.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:12px 14px;">Aucun résultat trouvé.</div>';
+                        return;
+                    }
+
+                    data.forEach(item => {
+                        const info    = typeInfo(item.type || item.class);
+                        const addr    = item.address || {};
+                        const city    = addr.city || addr.town || addr.village || addr.hamlet || addr.county || '';
+                        const cntry   = addr.country || '';
+                        const postcode= addr.postcode || '';
+                        const details = [postcode, city, cntry].filter(Boolean).join(' — ');
+
+                        const div = document.createElement('div');
+                        const re  = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+                        const hl  = item.display_name.split(',')[0].replace(re, '<strong>$1</strong>');
+
+                        div.innerHTML = `
+                            <span class="name">${hl}</span>
+                            <span class="details">${details}</span>
+                            <span class="tag ${info.cls}">${info.label}</span>
+                        `;
+                        div.addEventListener('click', () => localiser(item, info));
+                        suggest.appendChild(div);
+                    });
+                } catch (err) {
+                    spinner.style.display = 'none';
+                    console.error('Nominatim error:', err);
+                }
+            }, 300);
+        });
+
+        // ── 5. LANGUE WIKIPEDIA SELON LE PAYS ────────────────────────────────────
+        const COUNTRY_LANG = {
+            France:'fr', Germany:'de', Italy:'it', Spain:'es', Portugal:'pt',
+            Belgium:'fr', Netherlands:'nl', Switzerland:'de', Austria:'de',
+            Poland:'pl', 'Czech Republic':'cs', Czechia:'cs', Romania:'ro',
+            Hungary:'hu', Greece:'el', Sweden:'sv', Norway:'no', Denmark:'da',
+            Finland:'fi', Slovakia:'sk', Slovenia:'sl', Croatia:'hr',
+            Bulgaria:'bg', Ukraine:'uk', Serbia:'sr', 'Bosnia and Herzegovina':'bs',
+            Albania:'sq', 'United Kingdom':'en', Ireland:'en', Luxembourg:'fr',
+            Latvia:'lv', Lithuania:'lt', Estonia:'et', Iceland:'is',
+        };
+
+        // ── 5b. PHOTO : pipeline multi-sources ───────────────────────────────────
+        // Ordre : (1) Wikimedia Commons géo  →  (2) Wikipedia langue locale
+        //         →  (3) Wikipedia anglais  →  (4) image de paysage générique
+
+        async function chargerPhoto(nomLieu, nomVille, lat, lon, countryName) {
+            modalPhoto.innerHTML = '<p class="photo-msg">Recherche d\'une photo représentative…</p>';
+
+            const isStreet = /(rue|avenue|route|straße|calle|via|street|road|\d)/i.test(nomLieu);
+            const sujet    = isStreet ? nomVille : nomLieu;
+            const isFrance = countryName.toLowerCase().includes('france');
+
+            // --- STRATÉGIE 1 : WIKIDATA / WIKIPEDIA (Image officielle/représentative) ---
+            try {
+                // Étape A : Trouver l'entité Wikidata via le nom et les coordonnées
+                const wdSearchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(sujet)}&language=fr&format=json&origin=*`;
+                const resWd = await fetch(wdSearchUrl);
+                const dataWd = await resWd.json();
+                
+                if (dataWd.search && dataWd.search.length > 0) {
+                    const entityId = dataWd.search[0].id;
+                    // Étape B : Récupérer la propriété "image" (P18) de l'entité
+                    const wdEntityUrl = `https://www.wikidata.org/wiki/Special:EntityData/${entityId}.json?origin=*`;
+                    const resEnt = await fetch(wdEntityUrl);
+                    const dataEnt = await resEnt.json();
+                    const claims = dataEnt.entities[entityId].claims;
+                    
+                    if (claims && claims.P18) {
+                        const fileName = claims.P18[0].mainsnak.datavalue.value;
+                        const imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=1000`;
+                        afficherPhoto(imageUrl, sujet, '🏛️ Image Officielle (Wikidata)');
+                        return;
+                    }
+                }
+            } catch(e) { console.warn("Erreur Wikidata:", e); }
+
+            // --- STRATÉGIE 2 : WIKIPEDIA SUMMARY (Image principale de l'article) ---
+            const localLang = isFrance ? 'fr' : (COUNTRY_LANG[countryName] || 'en');
+            const wikiResult = await tryWikipedia(sujet, localLang);
+            if (wikiResult) { 
+                const hdUrl = wikiResult.replace(/\/\d+px-/, '/1000px-');
+                afficherPhoto(hdUrl, sujet, `📖 Wikipedia (${localLang})`); 
+                return; 
+            }
+
+            // --- STRATÉGIE 3 : WIKIMEDIA COMMONS QUALITÉ (Recherche textuelle) ---
+            if (isFrance) {
+                try {
+                    const searchQuery = `${sujet} incategory:"Quality images of France"|incategory:"Featured pictures of France"`;
+                    const searchUrl = `https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&srnamespace=6&srlimit=5&origin=*&format=json`;
+                    const resSearch = await fetch(searchUrl);
+                    const dataSearch = await resSearch.json();
+                    const searchResults = dataSearch?.query?.search || [];
+
+                    if (searchResults.length > 0) {
+                        const titles = searchResults.map(p => encodeURIComponent(p.title)).join('|');
+                        const infoUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=${titles}&prop=imageinfo&iiprop=url|mime&iiurlwidth=1000&origin=*&format=json`;
+                        const resInfo = await fetch(infoUrl);
+                        const dataInfo = await resInfo.json();
+                        const pages = Object.values(dataInfo?.query?.pages || {});
+                        const best = pages.find(p => {
+                            const mime = p.imageinfo?.[0]?.mime || '';
+                            const title = p.title.toLowerCase();
+                            return mime.startsWith('image/') && !mime.includes('svg') && !/flag|coat|arms|logo|blason/i.test(title);
+                        });
+                        
+                        if (best?.imageinfo?.[0]?.thumburl) {
+                            afficherPhoto(best.imageinfo[0].thumburl, sujet, '✨ Wikimedia Quality (FR)');
+                            return;
+                        }
+                    }
+                } catch(e) { console.warn("Erreur recherche qualité France:", e); }
+            }
+
+            // --- STRATÉGIE 4 : GÉOLOCALISATION (Dernier recours pour lieux précis) ---
+            try {
+                const wikiGeoUrl = `https://commons.wikimedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lon}&gsradius=2000&gslimit=20&gsnamespace=6&origin=*&format=json`;
+                const rg  = await fetch(wikiGeoUrl);
+                const dg  = await rg.json();
+                const pages = dg?.query?.geosearch || [];
+                const excluded = /flag|coat|arms|logo|emblem|blason|drapeau|wappen|shield|sign|panneau|plaque/i;
+                const imgPages = pages.filter(p => !excluded.test(p.title));
+
+                if (imgPages.length > 0) {
+                    const titles = imgPages.slice(0, 5).map(p => encodeURIComponent(p.title)).join('|');
+                    const infoUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=${titles}&prop=imageinfo&iiprop=url|mime&iiurlwidth=1000&origin=*&format=json`;
+                    const ri = await fetch(infoUrl);
+                    const di = await ri.json();
+                    const pagesInfo = Object.values(di?.query?.pages || {});
+                    const found = pagesInfo.find(p => p.imageinfo?.[0]?.mime?.startsWith('image/') && !p.imageinfo?.[0]?.mime?.includes('svg'));
+                    if (found?.imageinfo?.[0]?.thumburl) {
+                        afficherPhoto(found.imageinfo[0].thumburl, sujet, '📷 Vue à proximité');
+                        return;
+                    }
+                }
+            } catch(e) { }
+
+            // --- FALLBACK FINAL ---
+            const seed  = Math.abs([...nomLieu].reduce((a, c) => a + c.charCodeAt(0), 0)) % 1000;
+            const fallbackUrl = isFrance ? `https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1000&q=80` : `https://picsum.photos/seed/${seed}/1000/600`;
+            afficherPhoto(fallbackUrl, sujet, '🌄 Image illustrative');
+        }
+
+        async function tryWikipedia(sujet, lang) {
+            try {
+                const r = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(sujet)}`);
+                const d = await r.json();
+                return d.thumbnail?.source || null;
+            } catch { return null; }
+        }
+
+        function afficherPhoto(src, alt, source) {
+            modalPhoto.innerHTML = '';
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:relative;width:100%;height:100%;cursor:zoom-in;';
+            wrap.onclick = () => window.open(src.replace('width=800', 'width=2000'), '_blank');
+            
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = alt;
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;transition:transform 0.3s;';
+            img.onmouseover = () => img.style.transform = 'scale(1.05)';
+            img.onmouseout = () => img.style.transform = 'scale(1)';
+            
+            img.onerror = () => {
+                modalPhoto.innerHTML = `<div style="width:100%;height:100%;background:linear-gradient(135deg,#2d6a4f,#40916c,#74c69d);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">
+                    <span style="font-size:40px;">📍</span>
+                    <span style="color:#fff;font-size:13px;opacity:.8;">${alt}</span>
+                </div>`;
+            };
+            
+            const badge = document.createElement('div');
+            badge.textContent = source;
+            badge.style.cssText = 'position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:3px 8px;border-radius:12px;backdrop-filter:blur(2px);font-weight:500;';
+            
+            wrap.appendChild(img);
+            wrap.appendChild(badge);
+            modalPhoto.appendChild(wrap);
+        }
+
+        // ── 6. LOCALISER SUR LA CARTE ET OUVRIR LA MODALE ─────────────────────
+        function localiser(item, info) {
+            const lat  = parseFloat(item.lat);
+            const lon  = parseFloat(item.lon);
+            const addr = item.address || {};
+
+            const mainName = item.display_name.split(',')[0].trim();
+            const city     = addr.city || addr.town || addr.village || addr.hamlet || addr.county || mainName;
+            const country  = addr.country || '';
+            const postcode = addr.postcode || '';
+
+            input.value = mainName + (city && city !== mainName ? ` (${city})` : '');
+            suggest.innerHTML = '';
+
+            if (currentMarker) map.removeLayer(currentMarker);
+            currentMarker = L.marker([lat, lon]).addTo(map);
+            currentMarker.bindPopup(`<b>${mainName}</b><br>${[postcode, city, country].filter(Boolean).join(', ')}`).openPopup();
+
+            const zoom = zoomForType(item.type || item.class);
+            map.flyTo([lat, lon], zoom, { animate: true, duration: 1.2 });
+
+            // Remplir la modale
+            modalTitle.innerText   = mainName;
+            modalCountry.innerText = [city !== mainName ? city : '', country].filter(Boolean).join(' · ');
+            chargerPhoto(mainName, city, lat, lon, country);
+
+            btnMaps.onclick = () => {
+                const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+                const a = Object.assign(document.createElement('a'), { href: url, target: '_blank', rel: 'noopener noreferrer' });
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                modal.close();
+            };
+
+            btnClose.onclick = () => { modal.close(); input.select(); };
+
+            setTimeout(() => modal.showModal(), 1300);
+        }
+
+        // ── 7. NAVIGATION CLAVIER & FERMETURE ─────────────────────────────────
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && suggest.firstChild) suggest.firstChild.click();
+        });
+
+        document.addEventListener('click', e => {
+            if (e.target !== input) suggest.innerHTML = '';
+        });
+    </script>
+</body>
+</html>
