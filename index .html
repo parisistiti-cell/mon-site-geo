@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Europe - Géo-Localisation & Photos</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght=600&family=DM+Sans:wght=400;500&display=swap" rel="stylesheet">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --green: #2d6a4f;
+            --green-light: #40916c;
+            --green-pale: #e8f5e9;
+            --blue: #1565c0;
+            --blue-pale: #e3f2fd;
+            --amber: #b45309;
+            --amber-pale: #fef3c7;
+            --violet: #6d28d9;
+            --violet-pale: #ede9fe;
+            --red: #b91c1c;
+            --red-pale: #fee2e2;
+            --gray: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 20px rgba(0,0,0,0.08);
+            --shadow-lg: 0 10px 40px rgba(0,0,0,0.15);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 28px 16px 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.5rem, 4vw, 2.1rem);
+            color: #1a2535;
+            letter-spacing: -0.5px;
+        }
+
+        header p {
+            color: var(--gray);
+            font-size: 14px;
+            margin-top: 6px;
+        }
+
+        .flag-row {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            font-size: 22px;
+        }
+
+        /* Barre de recherche */
+        .search-wrapper {
+            width: 100%;
+            max-width: 560px;
+            margin-bottom: 16px;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .search-input-wrap {
+            position: relative;
+            flex: 1;
+            z-index: 1000;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            color: var(--gray);
+            pointer-events: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 13px 14px 13px 42px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            background: #fff;
+            color: #1a2535;
+            transition: border-color 0.25s, box-shadow 0.25s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--green-light);
+            box-shadow: 0 0 0 3px rgba(64, 145, 108, 0.15);
+        }
+
+        select#countryFilter {
+            padding: 12px 10px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-family: inherit;
+            background: #fff;
+            color: #1a2535;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.25s;
+            min-width: 160px;
+        }
+
+        /* Suggestions & Historique */
+        .suggestions {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 9999;
+        }
+
+        .suggestions div {
+            padding: 12px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: background 0.15s;
+        }
+
+        .suggestions div:hover { background: #f8fafc; }
+
+        .suggestions .name {
+            font-weight: 600;
+            color: #1a2535;
+            font-size: 14px;
+        }
+
+        .suggestions .details {
+            font-size: 12px;
+            color: var(--gray);
+        }
+
+        .suggestions .history-header {
+            padding: 8px 14px;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--green-light);
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border);
+            cursor: default;
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 20px;
+            align-self: flex-start;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .tag-city        { background: var(--blue-pale);   color: var(--blue); }
+        .tag-town        { background: var(--blue-pale);   color: var(--blue); }
+        .tag-village     { background: var(--green-pale);  color: var(--green); }
+        .tag-hamlet      { background: var(--green-pale);  color: var(--green); }
+        .tag-suburb      { background: var(--amber-pale);  color: var(--amber); }
+        .tag-street      { background: var(--amber-pale);  color: var(--amber); }
+        .tag-country     { background: var(--violet-pale); color: var(--violet); }
+        .tag-county      { background: var(--violet-pale); color: var(--violet); }
+        .tag-state       { background: var(--violet-pale); color: var(--violet); }
+        .tag-other       { background: #f1f5f9;            color: var(--gray); }
+        .tag-history     { background: #eaeaea;            color: #475569; }
+
+        #map {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .spinner {
+            display: none;
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-top-color: var(--green-light);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+        /* Modale */
+        dialog {
+            border: none;
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            padding: 0;
+            max-width: 500px;
+            width: 95%;
+            font-family: inherit;
+            overflow: hidden;
+        }
+
+        dialog::backdrop {
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--green) 0%, var(--green-light) 100%);
+            padding: 18px 20px 14px;
+            color: #fff;
+        }
+
+        .modal-header h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .modal-header .modal-country {
+            font-size: 12px;
+            opacity: 0.85;
+        }
+
+        .photo-container {
+            width: 100%;
+            height: 280px;
+            background: #eceff1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+        }
+
+        .photo-container img, .photo-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            object-fit: cover;
+        }
+
+        .photo-container .photo-msg {
+            color: var(--gray);
+            font-size: 13px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .modal-body {
+            padding: 16px 20px 20px;
+        }
+
+        .modal-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 11px 14px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+            transition: opacity 0.2s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:hover  { opacity: 0.9; }
+        .btn:active { transform: scale(0.98); }
+
+        .btn-google { background: #1a73e8; color: #fff; }
+        .btn-street { background: #e056fd; color: #fff; }
+        .btn-share  { background: #00b894; color: #fff; }
+        .btn-images { background: #ea4335; color: #fff; }
+        .btn-close  { background: #e2e8f0; color: #475569; grid-column: span 3; margin-top: 4px; }
+
+        .photo-link-overlay {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 20px;
+            text-decoration: none;
+            display: none;
+            gap: 5px;
+            align-items: center;
+            backdrop-filter: blur(4px);
+            transition: background 0.2s;
+            z-index: 10;
+        }
+        .photo-link-overlay:hover { background: rgba(234,67,53,0.85); }
+        .photo-link-overlay.visible { display: flex; }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            background: #1e293b;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 13px;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .attribution {
+            margin-top: 14px;
+            font-size: 11px;
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        /* Bouton upload photo */
+        .btn-upload-photo {
+            flex-shrink: 0;
+            width: 46px;
+            height: 46px;
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            background: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: border-color 0.2s, background 0.2s, transform 0.1s;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-upload-photo:hover {
+            border-color: #ea4335;
+            background: #fff5f5;
+            transform: scale(1.05);
+        }
+        .btn-upload-photo input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            border: none;
+        }
+        .btn-upload-photo .upload-preview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            inset: 0;
+            border-radius: calc(var(--radius) - 2px);
+        }
+        .btn-upload-photo .upload-icon { pointer-events: none; z-index: 1; }
+        .upload-hint {
+            font-size: 11px;
+            color: var(--gray);
+            text-align: center;
+            margin-top: 5px;
+        }
+        .upload-hint strong { color: #ea4335; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Géolocalisation Europe</h1>
+        <p>Communes, rues, lieux-dits & régions à travers toute l'Europe</p>
+        <div class="flag-row">
+            🇫🇷 🇩🇪 🇮🇹 🇪🇸 🇵🇹 🇧🇪 🇳🇱 🇵🇱 🇨🇿 🇦🇹 🇨🇭 🇬🇷 🇷🇴 🇸🇪 🇳🇴 🇩🇰 🇫🇮
+        </div>
+    </header>
+
+    <div class="search-wrapper">
+        <div class="search-row">
+            <div class="search-input-wrap">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" id="communeInput" placeholder="Rechercher une ville, rue, pays en Europe..." autocomplete="off">
+                <div class="spinner" id="spinner"></div>
+                <div id="suggestionsList" class="suggestions"></div>
+            </div>
+            <label class="btn-upload-photo" id="uploadPhotoBtn" title="Rechercher ce lieu par image sur Google Images">
+                <span class="upload-icon">📷</span>
+                <img class="upload-preview" id="uploadPreview" style="display:none;" alt="aperçu">
+                <input type="file" id="photoFileInput" accept="image/*">
+            </label>
+            <select id="countryFilter">
+                <option value="">🌍 Toute l'Europe</option>
+                <option value="fr">🇫🇷 France</option>
+                <option value="de">🇩🇪 Allemagne</option>
+                <option value="it">🇮🇹 Italie</option>
+                <option value="es">🇪🇸 Espagne</option>
+                <option value="pt">🇵🇹 Portugal</option>
+                <option value="be">🇧🇪 Belgique</option>
+                <option value="nl">🇳🇱 Pays-Bas</option>
+                <option value="ch">🇨🇭 Suisse</option>
+            </select>
+        </div>
+        <p class="upload-hint">📷 Glissez ou cliquez sur <strong>📷</strong> pour rechercher un lieu par photo sur Google Images</p>
+    </div>
+
+    <div id="map"></div>
+    <p class="attribution">Données : © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a></p>
+
+    <dialog id="locationModal">
+        <div class="modal-header">
+            <h3 id="modalTitle">Lieu Localisé</h3>
+            <div class="modal-country" id="modalCountry"></div>
+        </div>
+        <div class="photo-container" id="modalPhotoContainer">
+            <p class="photo-msg" id="photoStatus">Chargement des données visuelles...</p>
+            <a id="photoGoogleImgLink" class="photo-link-overlay" target="_blank" rel="noopener">
+                🔍 Google Images
+            </a>
+        </div>
+        <div class="modal-body">
+            <div class="modal-buttons">
+                <button class="btn btn-google" id="btnGoogleMaps">🌍 Google Maps</button>
+                <button class="btn btn-street" id="btnStreetView">📸 Street View</button>
+                <button class="btn btn-images" id="btnGoogleImages">🖼️ Google Images</button>
+                <button class="btn btn-share" id="btnShare">🔗 Partager</button>
+                <button class="btn btn-close" id="btnCloseModal">Fermer</button>
+            </div>
+        </div>
+    </dialog>
+
+    <div id="toast" class="toast">Lien copié dans le presse-papiers !</div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        const map = L.map('map').setView([48.5, 10], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        let currentMarker = null;
+        const input = document.getElementById('communeInput');
+        const suggest = document.getElementById('suggestionsList');
+        const spinner = document.getElementById('spinner');
+        const countryFlt = document.getElementById('countryFilter');
+        let debounceTimer;
+
+        const modal = document.getElementById('locationModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalCountry = document.getElementById('modalCountry');
+        const modalPhoto = document.getElementById('modalPhotoContainer');
+        const btnMaps = document.getElementById('btnGoogleMaps');
+        const btnStreet = document.getElementById('btnStreetView');
+        const btnShare = document.getElementById('btnShare');
+        const btnImages = document.getElementById('btnGoogleImages');
+        const btnClose = document.getElementById('btnCloseModal');
+        const toast = document.getElementById('toast');
+        const photoGoogleImgLink = document.getElementById('photoGoogleImgLink');
+
+        let currentLat, currentLon, currentPlaceName;
+
+        const TYPE_MAP = {
+            city: { label: 'Ville', cls: 'tag-city' },
+            town: { label: 'Bourg', cls: 'tag-town' },
+            village: { label: 'Village', cls: 'tag-village' },
+            hamlet: { label: 'Hameau', cls: 'tag-hamlet' },
+            suburb: { label: 'Quartier', cls: 'tag-suburb' },
+            road: { label: 'Rue', cls: 'tag-street' },
+            street: { label: 'Rue', cls: 'tag-street' },
+            country: { label: 'Pays', cls: 'tag-country' }
+        };
+
+        function typeInfo(t) { return TYPE_MAP[t] || { label: t || 'Lieu', cls: 'tag-other' }; }
+        function zoomForType(type) { return { country: 5, state: 8, city: 13, road: 16 }[type] || 15; }
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.style.opacity = '1';
+            setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+        }
+
+        // --- LOCAL STORAGE HISTORIQUE ---
+        function stockerRecherche(item) {
+            let history = JSON.parse(localStorage.getItem('geo_history')) || [];
+            history = history.filter(h => h.display_name !== item.display_name);
+            history.unshift(item);
+            if (history.length > 5) history.pop();
+            localStorage.setItem('geo_history', JSON.stringify(history));
+        }
+
+        function afficherHistorique() {
+            const history = JSON.parse(localStorage.getItem('geo_history')) || [];
+            suggest.innerHTML = '';
+            if (history.length === 0) return;
+
+            const title = document.createElement('div');
+            title.className = 'history-header';
+            title.innerText = 'Recherches récentes';
+            suggest.appendChild(title);
+
+            history.forEach(item => {
+                const info = typeInfo(item.type || item.class);
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <span class="name">🕒 ${item.display_name.split(',')[0]}</span>
+                    <span class="details">${item.display_name}</span>
+                `;
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    localiser(item, info, false);
+                });
+                suggest.appendChild(div);
+            });
+        }
+
+        input.addEventListener('focus', () => { if(input.value.trim() === '') afficherHistorique(); });
+        document.addEventListener('click', e => { if (e.target !== input) suggest.innerHTML = ''; });
+
+        // --- RECHERCHE ---
+        input.addEventListener('input', function () {
+            const q = this.value.trim();
+            suggest.innerHTML = '';
+            if (q.length === 0) { afficherHistorique(); return; }
+            if (q.length < 3) return;
+
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                spinner.style.display = 'block';
+                let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6&accept-language=fr`;
+                if (countryFlt.value) url += `&countrycodes=${countryFlt.value}`;
+
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    spinner.style.display = 'none';
+                    
+                    if(!data.length) return;
+
+                    data.forEach(item => {
+                        const info = typeInfo(item.type || item.class);
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <span class="name">${item.display_name.split(',')[0]}</span>
+                            <span class="details">${item.display_name}</span>
+                            <span class="tag ${info.cls}">${info.label}</span>
+                        `;
+                        div.addEventListener('click', () => localiser(item, info, true));
+                        suggest.appendChild(div);
+                    });
+                } catch (err) { spinner.style.display = 'none'; }
+            }, 300);
+        });
+
+        // --- IMAGE EN DIRECT (WIKIPEDIA) ---
+        async function chargerPhoto(sujet) {
+            modalPhoto.innerHTML = '<p class="photo-msg">Recherche d\'une image...</p>';
+            photoGoogleImgLink.classList.remove('visible');
+            modalPhoto.appendChild(photoGoogleImgLink);
+            try {
+                const r = await fetch(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(sujet)}`);
+                const d = await r.json();
+                if (d.thumbnail?.source) {
+                    const img = document.createElement('img');
+                    img.src = d.thumbnail.source;
+                    img.alt = sujet;
+                    modalPhoto.insertBefore(img, photoGoogleImgLink);
+                    photoGoogleImgLink.href = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(sujet)}`;
+                    photoGoogleImgLink.classList.add('visible');
+                    return;
+                }
+            } catch(e) {}
+            const fallback = document.createElement('div');
+            fallback.style = 'width:100%;height:100%;background:#2d6a4f;display:flex;align-items:center;justify-content:center;color:#fff;';
+            fallback.textContent = `🌄 ${sujet}`;
+            modalPhoto.insertBefore(fallback, photoGoogleImgLink);
+        }
+
+        // --- INTERACTION PRINCIPALE (AFFICHER LOUPE / RECHERCHE) ---
+        function localiser(item, info, sauvegarder) {
+            currentLat = parseFloat(item.lat);
+            currentLon = parseFloat(item.lon);
+            currentPlaceName = item.display_name.split(',')[0].trim();
+
+            input.value = currentPlaceName;
+            suggest.innerHTML = '';
+
+            if (sauvegarder) stockerRecherche(item);
+
+            if (currentMarker) map.removeLayer(currentMarker);
+            currentMarker = L.marker([currentLat, currentLon]).addTo(map);
+            
+            map.flyTo([currentLat, currentLon], zoomForType(item.type || item.class), { animate: true, duration: 1 });
+
+            modalTitle.innerText = currentPlaceName;
+            modalCountry.innerText = item.display_name;
+            chargerPhoto(currentPlaceName);
+
+            // Actions des boutons corrigées (HTTPS + Syntaxe ${} réparée)
+            btnMaps.onclick = () => {
+                window.open(`https://maps.google.com/?q=${currentLat},${currentLon}`, '_blank');
+            };
+
+            btnStreet.onclick = () => {
+                modalPhoto.innerHTML = `<iframe src="https://maps.google.com/maps?q=&layer=c&cbll=${currentLat},${currentLon}&cbp=11,0,0,0,0&output=svembed" style="width:100%; height:100%; border:none;"></iframe>`;
+            };
+
+            btnImages.onclick = () => {
+                window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(currentPlaceName)}`, '_blank');
+            };
+
+            btnShare.onclick = async () => {
+                const urlPartage = `https://maps.google.com/?q=${currentLat},${currentLon}`;
+                if (navigator.share) {
+                    try {
+                        await navigator.share({ title: currentPlaceName, text: 'Regarde ce lieu !', url: urlPartage });
+                    } catch(e) {}
+                } else {
+                    navigator.clipboard.writeText(urlPartage);
+                    showToast("Lien de coordonnées copié !");
+                }
+            };
+
+            modal.showModal();
+        }
+
+        btnClose.onclick = () => modal.close();
+
+        // --- RECHERCHE PAR PHOTO (Google Lens) — COMPATIBLE FACEBOOK IN-APP BROWSER ---
+        const photoFileInput = document.getElementById('photoFileInput');
+        const uploadPreview = document.getElementById('uploadPreview');
+        const uploadIcon = document.querySelector('.upload-icon');
+
+        // Détection navigateur intégré (Facebook, Instagram, Twitter…)
+        function isInAppBrowser() {
+            const ua = navigator.userAgent || '';
+            return /FBAN|FBAV|FB_IAB|Instagram|LinkedInApp|Twitter|Line\/|MicroMessenger/.test(ua);
+        }
+
+        // Ouvre un lien dans Chrome/Safari natif sur Android via intent://
+        function openExternalBrowser(url) {
+            const ua = navigator.userAgent || '';
+            if (/Android/i.test(ua)) {
+                // Intent Android pour forcer Chrome
+                const intent = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+                window.location.href = intent;
+            } else {
+                // iOS : on ne peut pas forcer Safari, on ouvre dans le même onglet
+                window.location.href = url;
+            }
+        }
+
+        photoFileInput.addEventListener('change', function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            // 1. Aperçu de l'image
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                uploadPreview.src = e.target.result;
+                uploadPreview.style.display = 'block';
+                uploadIcon.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+
+            // 2. Vérification DataTransfer (absent dans certains WebViews)
+            let dtSupported = false;
+            try {
+                const testDt = new DataTransfer();
+                testDt.items.add(file);
+                dtSupported = testDt.files.length > 0;
+            } catch (e) {
+                dtSupported = false;
+            }
+
+            if (!dtSupported) {
+                showToast("⚠️ Ouvre ce site dans Chrome ou Safari pour cette fonction.");
+                return;
+            }
+
+            const googleLensUrl = 'https://lens.google.com/upload?ep=ccm&s=csp&st=' + Date.now();
+            const inApp = isInAppBrowser();
+
+            if (inApp) {
+                // Dans le navigateur Facebook : le formulaire _blank est bloqué.
+                // On propose d'ouvrir dans le navigateur natif.
+                const ouvrirNatif = confirm(
+                    "📷 Pour rechercher par photo, ce lien doit s'ouvrir dans Chrome ou Safari.\n\nAppuyer sur OK pour continuer."
+                );
+                if (ouvrirNatif) {
+                    openExternalBrowser(googleLensUrl);
+                }
+                return;
+            }
+
+            // 3. Navigateur normal : soumission du formulaire vers Google Lens
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = googleLensUrl;
+            form.enctype = 'multipart/form-data';
+            form.target = '_blank';
+            form.style.display = 'none';
+
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.name = 'encoded_image';
+
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+
+            form.appendChild(fileInput);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        });
+    </script>
+</body>
+</html>
