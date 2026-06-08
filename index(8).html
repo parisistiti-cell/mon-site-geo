@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Europe - Géo-Localisation & Photos</title>
+    
+    <!-- CSS Leaflet obligatoire pour l'affichage de la carte -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght=600&family=DM+Sans:wght=400;500&display=swap" rel="stylesheet">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --green: #2d6a4f;
+            --green-light: #40916c;
+            --green-pale: #e8f5e9;
+            --blue: #1565c0;
+            --blue-pale: #e3f2fd;
+            --amber: #b45309;
+            --amber-pale: #fef3c7;
+            --violet: #6d28d9;
+            --violet-pale: #ede9fe;
+            --red: #b91c1c;
+            --red-pale: #fee2e2;
+            --gray: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 20px rgba(0,0,0,0.08);
+            --shadow-lg: 0 10px 40px rgba(0,0,0,0.15);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 28px 16px 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.5rem, 4vw, 2.1rem);
+            color: #1a2535;
+            letter-spacing: -0.5px;
+        }
+
+        header p {
+            color: var(--gray);
+            font-size: 14px;
+            margin-top: 6px;
+        }
+
+        .flag-row {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            font-size: 22px;
+        }
+
+        .search-wrapper {
+            width: 100%;
+            max-width: 620px;
+            margin-bottom: 16px;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .search-input-wrap {
+            position: relative;
+            flex: 1;
+            z-index: 1000;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            color: var(--gray);
+            pointer-events: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 13px 14px 13px 42px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            background: #fff;
+            color: #1a2535;
+            transition: border-color 0.25s, box-shadow 0.25s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--green-light);
+            box-shadow: 0 0 0 3px rgba(64, 145, 108, 0.15);
+        }
+
+        select#countryFilter {
+            padding: 12px 10px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-family: inherit;
+            background: #fff;
+            color: #1a2535;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.25s;
+            min-width: 150px;
+        }
+
+        .suggestions {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 9999;
+        }
+
+        .suggestions div {
+            padding: 12px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: background 0.15s;
+        }
+
+        .suggestions div:hover { background: #f8fafc; }
+
+        .suggestions .name { font-weight: 600; color: #1a2535; font-size: 14px; }
+        .suggestions .details { font-size: 12px; color: var(--gray); }
+        .suggestions .history-header {
+            padding: 8px 14px;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--green-light);
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border);
+            cursor: default;
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 20px;
+            align-self: flex-start;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .tag-city        { background: var(--blue-pale);   color: var(--blue); }
+        .tag-town        { background: var(--blue-pale);   color: var(--blue); }
+        .tag-village     { background: var(--green-pale);  color: var(--green); }
+        .tag-hamlet      { background: var(--green-pale);  color: var(--green); }
+        .tag-suburb      { background: var(--amber-pale);  color: var(--amber); }
+        .tag-street      { background: var(--amber-pale);  color: var(--amber); }
+        .tag-country     { background: var(--violet-pale); color: var(--violet); }
+        .tag-other       { background: #f1f5f9;            color: var(--gray); }
+
+        /* Conteneur de carte */
+        #map {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            background: #e0e0e0; /* Fond gris temporaire si Leaflet ne charge pas */
+        }
+
+        .spinner {
+            display: none;
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-top-color: var(--green-light);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+        /* Modales */
+        dialog {
+            border: none;
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            padding: 0;
+            max-width: 500px;
+            width: 95%;
+            font-family: inherit;
+            overflow: hidden;
+        }
+        dialog::backdrop {
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--green) 0%, var(--green-light) 100%);
+            padding: 18px 20px 14px;
+            color: #fff;
+        }
+        .modal-header h3 { font-family: 'Playfair Display', serif; font-size: 1.2rem; }
+        .modal-header .modal-country { font-size: 12px; opacity: 0.85; }
+
+        .photo-container {
+            width: 100%;
+            height: 280px;
+            background: #eceff1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .photo-container img, .photo-container iframe { width: 100%; height: 100%; border: none; object-fit: cover; }
+        .photo-body { padding: 16px 20px 20px; }
+        .modal-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+        .btn {
+            padding: 11px 14px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-google { background: #1a73e8; color: #fff; }
+        .btn-street { background: #e056fd; color: #fff; }
+        .btn-share  { background: #00b894; color: #fff; }
+        .btn-images { background: #ea4335; color: #fff; }
+        .btn-close  { background: #e2e8f0; color: #475569; grid-column: span 3; margin-top: 4px; }
+
+        /* Modale Vidéo spécifique */
+        #videoModal { max-width: 640px; }
+        .video-container { width: 100%; background: #000; display: flex; justify-content: center; }
+        .video-container video { width: 100%; display: block; max-height: 450px; }
+
+        /* Boutons de commande */
+        .btn-upload-photo, .btn-gps-video {
+            flex-shrink: 0;
+            width: 46px;
+            height: 46px;
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            background: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: transform 0.1s;
+        }
+        .btn-upload-photo:hover { border-color: #ea4335; background: #fff5f5; }
+        .btn-gps-video:hover { border-color: #1a73e8; background: #e3f2fd; }
+        
+        .upload-hint { font-size: 11px; color: var(--gray); text-align: center; margin-top: 5px; }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            background: #1e293b;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 10000;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Géolocalisation Europe V1.1</h1>
+        <p>Communes, rues, lieux-dits & régions à travers toute l'Europe</p>
+        <div class="flag-row">
+            🇫🇷 🇩🇪 🇮🇹 🇪🇸 🇵🇹 🇧🇪 🇳🇱 🇵🇱 🇨🇿 🇦🇹 🇨🇭 🇬🇷 🇷🇴 🇸🇪 🇳🇴 🇩🇰 🇫🇮
+        </div>
+    </header>
+
+    <div class="search-wrapper">
+        <div class="search-row">
+            <div class="search-input-wrap">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" id="communeInput" placeholder="Rechercher une ville, rue, pays..." autocomplete="off">
+                <div class="spinner" id="spinner"></div>
+                <div id="suggestionsList" class="suggestions"></div>
+            </div>
+            
+            <button class="btn-upload-photo" title="Google Images" onclick="window.open('https://images.google.com', '_blank')">📷</button>
+            <button class="btn-gps-video" title="Lancer le GPS Vidéo" onclick="ouvrirVideoGPS()">📡</button>
+            
+            <select id="countryFilter">
+                <option value="">🌍 Toute l'Europe</option>
+                <option value="fr">🇫🇷 France</option>
+                <option value="de">🇩🇪 Allemagne</option>
+                <option value="it">🇮🇹 Italie</option>
+                <option value="es">🇪🇸 Espagne</option>
+            </select>
+        </div>
+        <p class="upload-hint">📷 Google Images | 📡 Lecture de navigation_video_loud.mp4</p>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Modale de Lieu -->
+    <dialog id="locationModal">
+        <div class="modal-header">
+            <h3 id="modalTitle">Lieu Localisé</h3>
+            <div class="modal-country" id="modalCountry"></div>
+        </div>
+        <div class="photo-container" id="modalPhotoContainer"></div>
+        <div class="photo-body">
+            <div class="modal-buttons">
+                <button class="btn btn-google" id="btnGoogleMaps">🌍 Google Maps</button>
+                <button class="btn btn-street" id="btnStreetView">📸 Street View</button>
+                <button class="btn btn-images" id="btnGoogleImages">🖼️ Google Images</button>
+                <button class="btn btn-share" id="btnShare">🔗 Partager</button>
+                <button class="btn btn-close" onclick="document.getElementById('locationModal').close()">Fermer</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Modale Vidéo GPS -->
+    <dialog id="videoModal">
+        <div class="modal-header" style="background: #1565c0;">
+            <h3>Navigation GPS Vidéo</h3>
+        </div>
+        <div class="video-container">
+            <video id="gpsVideoPlayer" controls>
+                <source src="navigation_video_loud.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="photo-body">
+            <button class="btn btn-close" onclick="fermerVideoGPS()" style="width: 100%;">Fermer la vidéo</button>
+        </div>
+    </dialog>
+
+    <div id="toast" class="toast">Lien copié !</div>
+
+    <!-- Chargement sécurisé du script de la carte Leaflet -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Initialisation sécurisée de la carte
+        let map;
+        try {
+            map = L.map('map').setView([48.5, 10], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        } catch(e) {
+            console.error("Leaflet n'a pas pu se charger localement : ", e);
+        }
+
+        let currentMarker = null;
+        const input = document.getElementById('communeInput');
+        const suggest = document.getElementById('suggestionsList');
+        const spinner = document.getElementById('spinner');
+        const countryFlt = document.getElementById('countryFilter');
+        let debounceTimer;
+
+        // Éléments Vidéo
+        const videoModal = document.getElementById('videoModal');
+        const gpsVideoPlayer = document.getElementById('gpsVideoPlayer');
+
+        function ouvrirVideoGPS() {
+            videoModal.showModal();
+            gpsVideoPlayer.play().catch(() => {});
+        }
+
+        function fermerVideoGPS() {
+            gpsVideoPlayer.pause();
+            gpsVideoPlayer.currentTime = 0;
+            videoModal.close();
+        }
+
+        // Fermeture automatique en cliquant à côté de la modale
+        videoModal.addEventListener('click', (e) => { if (e.target === videoModal) fermerVideoGPS(); });
+
+        // --- RECHERCHE ---
+        input.addEventListener('input', function () {
+            const q = this.value.trim();
+            suggest.innerHTML = '';
+            if (q.length < 3) return;
+
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                spinner.style.display = 'block';
+                let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5&accept-language=fr`;
+                if (countryFlt.value) url += `&countrycodes=${countryFlt.value}`;
+
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    spinner.style.display = 'none';
+                    
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.innerHTML = `<span class="name">${item.display_name.split(',')[0]}</span><span class="details">${item.display_name}</span>`;
+                        div.addEventListener('click', () => localiser(item));
+                        suggest.appendChild(div);
+                    });
+                } catch (err) { spinner.style.display = 'none'; }
+            }, 300);
+        });
+
+        document.addEventListener('click', e => { if (e.target !== input) suggest.innerHTML = ''; });
+
+        function localiser(item) {
+            const lat = parseFloat(item.lat);
+            const lon = parseFloat(item.lon);
+            const name = item.display_name.split(',')[0].trim();
+
+            input.value = name;
+            suggest.innerHTML = '';
+
+            if (map) {
+                if (currentMarker) map.removeLayer(currentMarker);
+                currentMarker = L.marker([lat, lon]).addTo(map);
+                map.flyTo([lat, lon], 13);
+            }
+
+            document.getElementById('modalTitle').innerText = name;
+            document.getElementById('modalCountry').innerText = item.display_name;
+
+            // Liens d'action corrigés
+            document.getElementById('btnGoogleMaps').onclick = () => window.open(`https://maps.google.com/?q=${lat},${lon}`, '_blank');
+            document.getElementById('btnStreetView').onclick = () => window.open(`https://maps.google.com/maps?q=&layer=c&cbll=${lat},${lon}`, '_blank');
+            document.getElementById('btnGoogleImages').onclick = () => window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(name)}`, '_blank');
+            
+            document.getElementById('btnShare').onclick = () => {
+                navigator.clipboard.writeText(`https://maps.google.com/?q=${lat},${lon}`);
+                const t = document.getElementById('toast'); t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2000);
+            };
+
+            document.getElementById('locationModal').showModal();
+        }
+    </script>
+</body>
+</html>
